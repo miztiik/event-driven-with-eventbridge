@@ -121,5 +121,5 @@ class ServerlessEventBridgeConsumerStack(core.Stack):
             self,
             "msgConsumer",
             value=f"https://console.aws.amazon.com/lambda/home?region={core.Aws.REGION}#/functions/{msg_consumer_fn.function_name}",
-            description="Process EventBridge in SQS queue"
+            description="Process events received from eventbridge event bus"
         )

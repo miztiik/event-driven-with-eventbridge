@@ -112,9 +112,3 @@ class ServerlessEventBridgeProducerStack(core.Stack):
             description="Produce data events and push to EventBridge Queue."
         )
 
-        output_2 = core.CfnOutput(
-            self,
-            "ReliableQueue",
-            value=f"https://console.aws.amazon.com/sqs/v2/home?region={core.Aws.REGION}#/queues",
-            description="Reliable Queue"
-        )

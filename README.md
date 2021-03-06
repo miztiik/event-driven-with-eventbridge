@@ -15,10 +15,6 @@ AWS offers multiple capabilities to perform event-driven architectures. Event-dr
  - **Event Consumers**. 
 A producer publishes an event to the router, which filters and pushes the events to consumers. Producer services and consumer services are decoupled, which allows them to be scaled, updated, and deployed independently.
 
-analytics on streaming data. As they are using kinesis data streams to ingest the stream of sales events, We can leverage Kinesis Data Analytics capability with AWS to perform stream analytics using regular `SQL` or `Apache Flink`. In this solution, we will use simple SQL query to calculate the `revenue_per_store` metric and store the value in S3 for further processing.
-
-![Miztiik Automation: Streaming Analytics Using Kinesis Data Analytics](images/miztiik_automation_kinesis_tumbling_window_analytics_architecture_03.png)
-
 Let us assume each store produces an event like the one shown below,
 
 ```json
@@ -45,8 +41,7 @@ Let us assume each store produces an event like the one shown below,
 
 The `detail-type` attribute is used to capture the type of event. Based on this attribute this message can be routed to the appropriate consumer. We will use a lambda to perform the producer and consumer actions. For the routing the events, we will use AWS EventBridge - `Event Bus` and `Event Rules` to receive and route messages. In this article, we will build an architecture, similar to the one shown below. We will start backwards so that all the dependencies are satisfied.
 
-![Miztiik Automation: Streaming Analytics Using Kinesis Data Analytics](images/miztiik_automation_kinesis_tumbling_window_analytics_architecture_00.png)
-
+![Miztiik Automation: Event Driven Architecture with EventBridge & Lambda](images/miztiik_automation_event_driven_with_eventbridge_architecture_000.png)
 
 
 1.  ## 🧰 Prerequisites
@@ -65,8 +60,8 @@ The `detail-type` attribute is used to capture the type of event. Based on this 
     - Get the application code
 
       ```bash
-      git clone https://github.com/miztiik/kinesis-tumbling-window-analytics
-      cd kinesis-tumbling-window-analytics
+      git clone https://github.com/miztiik/event-driven-with-eventbridge
+      cd event-driven-with-eventbridge
       ```
 
 1.  ## 🚀 Prepare the dev environment to run AWS CDK
@@ -95,95 +90,94 @@ The `detail-type` attribute is used to capture the type of event. Based on this 
     You should see an output of the available stacks,
 
     ```bash
-    kinesis-tumbling-window-analytics-producer-stack
-    kinesis-tumbling-window-analytics-firehose-stack
-    kinesis-tumbling-window-analytics-consumer-stack
+    event-driven-with-eventbridge-orders-eventbus-stack
+    event-driven-with-eventbridge-orders-producer-stack
+    event-driven-with-eventbridge-orders-consumer-stack
     ```
 
 1.  ## 🚀 Deploying the application
 
     Let us walk through each of the stacks,
 
-    - **Stack: kinesis-tumbling-window-analytics-producer-stack**
+    - **Stack: event-driven-with-eventbridge-orders-eventbus-stack**
 
-      This stack will create a kinesis data stream and the producer lambda function. Each lambda runs for a minute ingesting stream of sales events for `5` different stores ranging from `store_id=1` to `store_id=5`
-
-      Initiate the deployment with the following command,
-
-      ```bash
-      cdk deploy kinesis-tumbling-window-analytics-producer-stack
-      ```
-
-      After successfully deploying the stack, Check the `Outputs` section of the stack. You will find the `streamDataProcessor` producer lambda function. We will invoke this function later during our testing phase.
-
-    - **Stack: kinesis-tumbling-window-analytics-firehose-stack**
-
-      This stack will create the firehose stack to receive the stream of events from kinesis analytics and also deploy the simple lambda transformer. This firehose is set to buffer for `1` minute or until `1`MB of data is collected before sending it to S3
+      This stack will create a EventBridge event bus that can receive events from producers.
 
       Initiate the deployment with the following command,
 
       ```bash
-      cdk deploy kinesis-tumbling-window-analytics-firehose-stack
+      cdk deploy event-driven-with-eventbridge-orders-eventbus-stack
       ```
 
-      After successfully deploying the stack, Check the `Outputs` section of the stack. You will find the `FirehoseDataStore` where the analytics results will be stored eventually.
+      After successfully deploying the stack, Check the `Outputs` section of the stack. You will find the `StoreOrdersEventBus` event bus resource created for you.
 
-    - **Stack: kinesis-tumbling-window-analytics-consumer-stack**
+    - **Stack: event-driven-with-eventbridge-orders-producer-stack**
 
-      This stack will create the kinesis analytics. The SQL _application code_ that does the magic of aggregating sales across stores is baked into the stack. If you would like to take a look and make some improvments
+      This stack will create the producer lambda function will generate a payload(_like the one shown above_) and sends them to the event bus created in the previous stack. This function is designed to produce two types of events `sales-events` and `inventory-events`. We will use this feature later to consume only one type of event in the consumer. By default the producer is configured to generate `5` events in total with a randomized mix of the two event types.
 
-      ```sql
-      "CREATE OR REPLACE STREAM "DEST_SQL_STREAM_BY_STORE_ID" ("store_id" VARCHAR(16),"revenue" REAL, "timestamp" TIMESTAMP);
-        CREATE OR REPLACE PUMP "STREAM_PUMP" AS INSERT INTO "DEST_SQL_STREAM_BY_STORE_ID"
-            SELECT STREAM "store_id", SUM("sales") AS "revenue", ROWTIME AS "timestamp"
-                FROM "STORE_REVENUE_PER_MIN_001"
-                GROUP BY STEP("STORE_REVENUE_PER_MIN_001".ROWTIME BY INTERVAL '60' SECOND),
-                "store_id";
-      ```
-      Here we are aggregating the sales revenue per store per minute. Initiate the deployment with the following command,
+      Initiate the deployment with the following command,
 
       ```bash
-      cdk deploy kinesis-tumbling-window-analytics-consumer-stack
+      cdk deploy event-driven-with-eventbridge-orders-producer-stack
       ```
+
+      After successfully deploying the stack, Check the `Outputs` section of the stack. You will find the `eventBridgeDataProducer` resource.
+
+    - **Stack: event-driven-with-eventbridge-consumer-stack**
+
+      This stack will create a event bridge rule that will be trigger the lambda function when ever it receives an event of `detail-type = sales-events`
+
+      ```bash
+      cdk deploy event-driven-with-eventbridge-consumer-stack
+      ```
+
+      After successfully deploying the stack, Check the `Outputs` section of the stack. You will find the `msgConsumer` resource.
 
 1.  ## 🔬 Testing the solution
 
-    Before we go ahead and start testing the solution, We need to start the Kinesis Analytics Application. Unfortunately(or maybe fortunately for cost reasons) we cannot start it automatically through cloudformation. We will have to do it through a custom resource(which is initself a pain to maintain) or do it manually. 
-    
-    1. **Start Kinesis Analytics Application**:
-      Here is a screenshot, to help you do that. Navigate to kineis analytics and choose `Run`.
-      ![Miztiik Automation: Streaming Analytics Using Kinesis Data Analytics](images/miztiik_automation_kinesis_tumbling_window_analytics_architecture_06.png)
     1. **Invoke Producer Lambda**:
-      Let us start by invoking the lambda from the producer stack `kinesis-tumbling-window-analytics-producer-stack` using the AWS Console. If you want to ingest more events, use another browser window and invoke the lambda again.
+      Let us start by invoking the lambda- `eventBridgeDataProducer` from the producer stack using the AWS Console. If you want to ingest more events, invoke the lambda few times.
           ```json
           {
             "statusCode": 200,
-            "body": "{\"message\": {\"status\": true, \"record_count\": 1170, \"tot_sales\": 59109.60999999987}}"
+            "body": "{\"message\": {\"status\": true, \"tot_msgs\": 5, \"bad_msgs\": 0, \"sale_evnts\": 1, \"inventory_evnts\": 4}}"
           }
           ```
-        Here in this invocation, I have ingested about `1170` events and the total sales volume across all stores`[1..5]` is `59109`.
-    1. **Check FirehoseDataStore**:
+        Here in this invocation, We have ingested about `5` messages. Within those message, we have `1` messages does not have `store_id` identified as `bad_msgs` and `1` event for sales and `4` events for inventory
 
-       After about `60` seconds, Navigate to the data store S3 Bucket created by the firehose stack `kinesis-tumbling-window-analytics-firehose-stack`. You will be able to find an object key similar to this `kinesis-tumbling-window-analy-fhdatastore6289deb2-5iydp3790az3sales_revenue/2021/01/31/14/revenue_analytics_stream-1-2021-01-31-14-11-00-b2412476-aace-41a7-bbd5-e1a170d2573c`. 
+    1. **Check Consumer Cloudwatch Logs**:
 
-       Kinesis firehose does not have a native mechanism to set the file extension. I was not too keen on setting up another lambda to add the suffix. But the file contents should be one valid `JSON` object per line.
+       After a couple of minutes, check the consumer cloudwatch logs. Usually the log name should be something like this, `/aws/lambda/events_consumer_fn`. Navigate to the log stream.
 
-      The contents of the file should look like this, 
-      ```json
-      {"store_id": "store_1", "revenue": 8671.3125, "timestamp": "2021-01-31 14:47:00.000"}
-      {"store_id": "store_4", "revenue": 10318.991, "timestamp": "2021-01-31 14:47:00.000"}
-      {"store_id": "store_5", "revenue": 8561.629, "timestamp": "2021-01-31 14:47:00.000"}
-      {"store_id": "store_3", "revenue": 9370.749, "timestamp": "2021-01-31 14:47:00.000"}
-      {"store_id": "store_2", "revenue": 8606.821, "timestamp": "2021-01-31 14:47:00.000"}
+       You should be finding some successfully processed messages like this,
+       ```json
+        {
+            "version": "0",
+            "id": "bc36b7e4-b984-dde0-31ed-9f565413fe01",
+            "detail-type": "sales-events",
+            "source": "Miztiik-Automation-Data-Producer",
+            "account": "23004178",
+            "time": "2021-03-06T20:53:37Z",
+            "region": "us-east-1",
+            "resources": [],
+            "detail": {
+                "request_id": "b2070832-e4a3-4843-ac54-a3880e583688",
+                "name": "Aarakocra",
+                "category": "Mobiles",
+                "store_id": "store_5",
+                "sales": 29.9,
+                "contact_me": "github.com/miztiik",
+                "is_return": true
+            }
+        }
+       ```
 
-      ```
-
-      You can observe that the revenue per store is aggregated and stored along with `store_id` and `timestamp` attribute. You can feed this into a dashboard like kibana for the executives to provide a real-time snapshot of the sales happening in the stores.
+      You can observe that the only events with detail type `sales-events` are logged.
 
 
 1.  ## 📒 Conclusion
 
-    Here we have demonstrated how to use kinesis analytics using simple SQL queries for performing steaming analytics on incoming data. You can extend this further by enriching the item before storing in S3 or partitioning it better for ingesting into data lake platforms.
+    Here we have demonstrated how to use EventBridge for event driven architecture. You can extend this further by enriching the event rules by filtering them based on `sales` value or sending a event for a particular `category` to that supplier/vendor system.
 
 1.  ## 🧹 CleanUp
 
@@ -209,7 +203,7 @@ The `detail-type` attribute is used to capture the type of event. Based on this 
 
 ## 📌 Who is using this
 
-This repository aims to show how to perform streaming analtics to new developers, Solution Architects & Ops Engineers in AWS. Based on that knowledge these Udemy [course #1][103], [course #2][102] helps you build complete architecture in AWS.
+This repository aims to show how to use EventBridge for event driven architecture to new developers, Solution Architects & Ops Engineers in AWS. Based on that knowledge these Udemy [course #1][102], [course #2][101] helps you build complete architecture in AWS.
 
 ### 💡 Help/Suggestions or 🐛 Bugs
 
@@ -221,31 +215,16 @@ Thank you for your interest in contributing to our project. Whether it is a bug 
 
 ### 📚 References
 
-1. [Docs: Kinesis Analytics Tumbling Windows - Flink][1]
-
-1. [Docs: Kinesis Streaming Analytics - GROUP BY][2]
-
-1. [Docs: Tumbling Window Using an Event Timestamp][3]
-
-1. [Blog: Kinesis Firehose S3 Custom Prefix][4]
-
-1. [Docs: Kinesis Firehose S3 Custom Prefix][5]
-
-1. [Docs: Kinesis Analytics IAM Role][6]
+1. [Docs: What is an Event-Driven Architecture?][1]
 
 
 ### 🏷️ Metadata
 
-![miztiik-success-green](https://img.shields.io/badge/Miztiik:Automation:Level-300-blue)
+![miztiik-success-green](https://img.shields.io/badge/Miztiik:Automation:Level-200-orange)
 
-**Level**: 300
+**Level**: 200
 
-[1]: https://docs.aws.amazon.com/kinesisanalytics/latest/java/examples-tumbling.html
-[2]: https://docs.aws.amazon.com/kinesisanalytics/latest/dev/tumbling-window-concepts.html
-[3]: https://docs.aws.amazon.com/kinesisanalytics/latest/dev/examples-window-tumbling-event.html
-[4]: https://aws.amazon.com/blogs/big-data/amazon-kinesis-data-firehose-custom-prefixes-for-amazon-s3-objects/
-[5]: https://docs.aws.amazon.com/firehose/latest/dev/s3-prefixes.html
-[6]: https://docs.aws.amazon.com/kinesisanalytics/latest/dev/iam-role.html#iam-role-trust-policy
+[1]: https://aws.amazon.com/event-driven-architecture/
 
 [100]: https://www.udemy.com/course/aws-cloud-security/?referralCode=B7F1B6C78B45ADAF77A9
 [101]: https://www.udemy.com/course/aws-cloud-security-proactive-way/?referralCode=71DC542AD4481309A441

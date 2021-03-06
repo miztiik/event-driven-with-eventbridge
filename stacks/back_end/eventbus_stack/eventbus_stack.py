@@ -48,9 +48,9 @@ class EventBusStack(core.Stack):
             description="To know more about this automation stack, check out our github page."
         )
 
-        output_2 = core.CfnOutput(
+        output_1 = core.CfnOutput(
             self,
-            "msgConsumer",
-            value=f"https://console.aws.amazon.com/lambda/home?region={core.Aws.REGION}#/functions/{self.orders_bus.event_bus_name}",
+            "StoreOrdersEventBus",
+            value=f"https://console.aws.amazon.com/events/home?region={core.Aws.REGION}#/eventbus/{self.orders_bus.event_bus_name}",
             description="Orders EventBus"
         )
