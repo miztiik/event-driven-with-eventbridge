@@ -1,0 +1,19 @@
+{
+    "version": "0",
+    "id": "d14dcbec-a626-b929-6d26-9b4a0babfdc2",
+    "detail-type": "sales-events",
+    "source": "Miztiik-Automation-Data-Producer",
+    "account": "230023004178",
+    "time": "2021-03-06T17:15:06Z",
+    "region": "us-east-1",
+    "resources": [],
+    "detail": {
+        "request_id": "b4d727cc-2b00-4146-aee9-33097f33a6e2",
+        "name": "Minotaur",
+        "category": "Books",
+        "store_id": "store_2",
+        "sales": 75.32,
+        "contact_me": "github.com/miztiik",
+        "is_return": true
+    }
+}
