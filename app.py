@@ -37,30 +37,6 @@ orders_event_consumer_stack = ServerlessEventBridgeConsumerStack(
     description="Miztiik Automation: Consume Customer Order Events Messages"
 )
 
-"""
-# Consume messages from SQS
-reliable_message_queue_stack = ServerlessSqsConsumerStack(
-    app,
-    f"{app.node.try_get_context('project')}-consumer-stack",
-    stack_log_level="INFO",
-    reliable_queue=sqs_message_producer_stack.get_queue,
-    max_msg_receive_cnt=sqs_message_producer_stack.max_msg_receive_cnt,
-    description="Miztiik Automation: Consume messages from SQS"
-)
-
-# Replay Messages in DLQ back to main queue with exponential backoff
-reliable_message_dlq_replay_stack = ServerlessSqsRetryStack(
-    app,
-    f"{app.node.try_get_context('project')}-stack",
-    stack_log_level="INFO",
-    reliable_queue=sqs_message_producer_stack.get_queue,
-    reliable_queue_dlq=sqs_message_producer_stack.get_dlq,
-    max_msg_receive_cnt=sqs_message_producer_stack.max_msg_receive_cnt,
-    description="Miztiik Automation: Replay Messages in DLQ back to main queue with exponential backoff"
-)
-"""
-
-
 # Stack Level Tagging
 _tags_lst = app.node.try_get_context("tags")
 
